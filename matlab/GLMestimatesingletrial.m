@@ -82,6 +82,14 @@ function results = GLMestimatesingletrial(design,data,stimdur,tr,outputdir,opt)
 %     as large datasets can require a lot of RAM. If you do not request the various model types,
 %     they will be cleared from memory (but still potentially saved to disk).
 %     Default: [0 0 0 1] which means return only the final type-D model.
+%   <reconmask> (optional) is a logical 3D volume that can be used to mask the 
+%     inputs to nVoxels x Time. This can dramatically speed up processing and
+%     reduce RAM usage. If figures are requested, this mask will be used to 
+%     reconstruct the images as needed. Outputs will also be converted to 3D/4D
+%     prior to saving. The dimensions much match the input data. If the mask is
+%     provided and the data is already in vector format, masking will of course
+%     be skipped, but the mask will be used to unmask the data prior to saving
+%     and to generate the nice images (see wantfig). 
 %
 %   *** GLM FLAGS ***
 %
@@ -277,6 +285,24 @@ for p=1:length(data)
 end
 assert(all(isfinite(data{1}(:))),'We checked the first run and found some non-finite values (e.g. NaN, Inf). Please fix and re-run.');
 assert(length(design)==length(data),'<design> and <data> should have the same number of runs');
+
+% Vectorize the data if a mask is provided. 
+if isfield(opt, 'reconmask')
+  if size(data{1},4) > 1 % data is 3D
+    assert(numel(opt.reconmask) == numel(data{1}(:,:,:,1)),'The mask must have the same spatial dimensions as the input data. Please check and re-run.');
+    fprintf('Masking with provided file, data reduced to %4.2f percent of original size \n', 100*sum(sum(sum(opt.reconmask)))/numel(opt.reconmask))
+    for runNum = 1:length(design)
+      data{runNum} = maskData(data{runNum}, opt.reconmask);
+    end
+
+  else
+    % Data is 2D, but still - we have to check the mask
+    assert(sum(sum(sum(opt.reconmask))) == numel(data{1}(:,1)),'The mask must contain the same number of included voxels as the data. Please check and re-run.');
+    fprintf('Data is already masked, but will be unmasked for images and saving. \n')
+  end
+
+end
+
 
 % calc
 numruns = length(design);
@@ -497,6 +523,15 @@ meanvol = results0.meanvol;
 % save to disk if desired
 if opt.wantfileoutputs(whmodel)==1
   file0 = fullfile(outputdir{1},'TYPEA_ONOFF.mat');
+  if isfield(opt, 'reconmask') % Recon all outputs back to 3d
+    results0.R2 = unMaskData(squeeze(results0.R2), opt.reconmask);
+    results0.R2run = unMaskData(squeeze(permute(results0.R2run, [1,4,2,3])), opt.reconmask); % because of KK hack at start
+    results0.meanvol = unMaskData(squeeze(results0.meanvol), opt.reconmask);
+    results0.residstd = unMaskData(squeeze(results0.residstd), opt.reconmask);
+    results0.residstdlowpass = unMaskData(squeeze(results0.residstdlowpass), opt.reconmask);
+    results0.modelmd{2} = unMaskData(squeeze(results0.modelmd{2}), opt.reconmask);
+  end
+
   fprintf('*** Saving results to %s. ***\n',file0);
   save(file0,'-struct','results0','-v7.3');
 end
@@ -505,6 +540,10 @@ end
 if wantfig && is3d
   imwrite(uint8(255*makeimagestack(onoffR2,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'onoffR2.png'));
   imwrite(uint8(255*makeimagestack(meanvol,1)),gray(256),          fullfile(outputdir{2},'meanvol.png'));
+elseif wantfig && isfield(opt, 'reconmask')
+  %Its not 3d, but that will not stop us. 
+  imwrite(uint8(255*makeimagestack(unMaskData(onoffR2, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'onoffR2.png'));
+  imwrite(uint8(255*makeimagestack(unMaskData(meanvol, opt.reconmask),1)),gray(256),          fullfile(outputdir{2},'meanvol.png'));
 end
 
 % preserve in memory if desired, and then clean up
@@ -653,12 +692,43 @@ else
   if opt.wantfileoutputs(whmodel)==1
     file0 = fullfile(outputdir{1},'TYPEB_FITHRF.mat');
     fprintf('*** Saving results to %s. ***\n',file0);
+    if isfield(opt, 'reconmask')
+      %unmask
+      R2 = unMaskData(squeeze(R2), opt.reconmask);
+      R2run = unMaskData(squeeze(permute(R2run, [1,4,2,3])), opt.reconmask); % because of KK hack at start
+     
+      HRFindex = unMaskData(squeeze(HRFindex), opt.reconmask);
+      HRFindexrun = unMaskData(squeeze(permute(HRFindexrun, [1,4,2,3])), opt.reconmask);
+      modelmd = unMaskData(squeeze(permute(modelmd, [1,4,2,3])), opt.reconmask);
+      meanvol = unMaskData(squeeze(meanvol), opt.reconmask);
+      FitHRFR2 = unMaskData(squeeze(permute(FitHRFR2, [1,4,2,3])), opt.reconmask); % because of KK hack at start
+
+      % By Run HRFFit is harder. 
+      tempfithrfr2 = zeros([size(opt.reconmask,1), size(opt.reconmask,2),size(opt.reconmask,3), numruns, nh ]);
+      for i = 1:size(FitHRFR2run, 5)
+        tempfit = FitHRFR2run(:,:,:,:,i);
+        tempfithrfr2(:,:,:,:,i) = unMaskData(squeeze(permute(tempfit, [1,4,2,3,5])), opt.reconmask);
+      end
+      FitHRFR2run = tempfithrfr2;
+      clear tempfithrfr2 tempfit
+    end
+
     save(file0,allvars{:},'-v7.3');
   end
 
   % figures?
   if wantfig && is3d
     imwrite(uint8(255*makeimagestack(HRFindex,[1 nh])),jet(256),fullfile(outputdir{2},'HRFindex.png'));
+  elseif wantfig && isfield(opt, 'reconmask')
+    % Its not 3d, but that will not stop us. 
+    if numel(HRFindex) ~= numel(opt.reconmask)
+      % It has not yet been unmasked - the user did not save 
+     imwrite(uint8(255*makeimagestack(unMaskData(HRFindex, opt.reconmask),[1 nh])),jet(256),fullfile(outputdir{2},'HRFindex.png'));
+    else
+      % The user saved the data above, go ahead with it, no unmasking needed. 
+      imwrite(uint8(255*makeimagestack(HRFindex,[1 nh])),jet(256),fullfile(outputdir{2},'HRFindex.png'));
+    end
+
   end
 
   % preserve in memory if desired, and then clean up
@@ -669,6 +739,11 @@ else
     end
   end
   clear FitHRFR2 FitHRFR2run R2 R2run modelmd;  % Note that we keep HRFindex and HRFindexrun around!!
+  if isfield(opt, 'reconmask')
+    % Have to put the HRFindex and HRFindexrun back into what glmsingle expects.
+    HRFindex = maskData(HRFindex, opt.reconmask);
+    HRFindexrun = permute(maskData(HRFindexrun, opt.reconmask), [1,3,4,2]); % From nvox X run back to Nvox X 1 X 1 X Run
+  end
 
 end
 
@@ -683,7 +758,11 @@ if opt.wantglmdenoise==0
 
 else
 
-  % figure out the noise pool
+  % figure out the noise pool, careful about masking
+  if isfield(opt, 'reconmask')
+    % The mean data needs to be put back into a comparable state
+    meanvol = maskData(meanvol, opt.reconmask);
+  end
   thresh = prctile(meanvol(:),opt.brainthresh(1))*opt.brainthresh(2);    % threshold for non-brain voxels
   bright = meanvol > thresh;                                             % logical indicating voxels that are bright (brain voxels)
   badR2 = onoffR2 < opt.brainR2;                                         % logical indicating voxels with poor R2
@@ -1007,6 +1086,7 @@ for ttt=1:length(todo)
             scaleoffset(relix(ii(vv)),:) = h;
             modelmd(relix(ii(vv)),:) = X*h;
           end
+
         else
           scaleoffset = [];
           modelmd(relix(ii),:) = results0(ll).modelmd{2}(ii,:);
@@ -1035,10 +1115,55 @@ for ttt=1:length(todo)
   if whmodel==3
     allvars = {'HRFindex','HRFindexrun','glmbadness','pcvoxels','pcnum','xvaltrend', ...
                'noisepool','pcregressors','modelmd','R2','R2run','meanvol'};
+    if isfield(opt, 'reconmask')
+      % Unmask all of the data. 
+      R2 = unMaskData(squeeze(R2), opt.reconmask);
+      R2run = unMaskData(squeeze(permute(R2run, [1,4,2,3])), opt.reconmask); 
+      HRFindex = unMaskData(squeeze(HRFindex), opt.reconmask);
+      HRFindexrun = unMaskData(squeeze(permute(HRFindexrun, [1,4,2,3])), opt.reconmask);
+      modelmd = unMaskData(squeeze(permute(modelmd, [1,4,2,3])), opt.reconmask);
+      meanvol = unMaskData(squeeze(meanvol), opt.reconmask);
+      noisepool = unMaskData(squeeze(noisepool), opt.reconmask);
+      pcvoxels = unMaskData(squeeze(pcvoxels), opt.reconmask);
+      glmbadness = unMaskData(squeeze(permute(glmbadness, [1,4,2,3])), opt.reconmask);
+    end
     file0 = fullfile(outputdir{1},'TYPEC_FITHRF_GLMDENOISE.mat');
+
+    % Very inelegant, but if we saved everything out, then we need to put everything back for the next round of modeling
+
+    if isfield(opt, 'reconmask')
+      % Unmask all of the data. 
+      R2 = maskData(R2, opt.reconmask);
+      HRFindex = maskData(HRFindex, opt.reconmask);
+      meanvol = maskData(meanvol, opt.reconmask);
+      noisepool = maskData(noisepool, opt.reconmask);
+      pcvoxels = maskData(pcvoxels, opt.reconmask);
+      glmbadness = permute(maskData(glmbadness, opt.reconmask), [1,3,4,2]);
+      R2run = permute(maskData(R2run, opt.reconmask), [1,3,4,2]);
+      HRFindexrun = permute(maskData(HRFindexrun, opt.reconmask), [1,3,4,2]);
+      modelmd = permute(maskData(modelmd, opt.reconmask), [1,3,4,2]);
+    end
+
+
   else
     allvars = {'HRFindex','HRFindexrun','glmbadness','pcvoxels','pcnum','xvaltrend', ...
                'noisepool','pcregressors','modelmd','R2','R2run','rrbadness','FRACvalue','scaleoffset','meanvol'};
+
+    if isfield(opt, 'reconmask')
+      % Unmask all of the data. 
+      R2 = unMaskData(squeeze(R2), opt.reconmask);
+      R2run = unMaskData(squeeze(permute(R2run, [1,4,2,3])), opt.reconmask); % because of KK hack at start
+      HRFindex = unMaskData(squeeze(HRFindex), opt.reconmask);
+      HRFindexrun = unMaskData(squeeze(permute(HRFindexrun, [1,4,2,3])), opt.reconmask);
+      modelmd = unMaskData(squeeze(permute(modelmd, [1,4,2,3])), opt.reconmask);
+      meanvol = unMaskData(squeeze(meanvol), opt.reconmask);
+      noisepool = unMaskData(squeeze(noisepool), opt.reconmask);
+      pcvoxels = unMaskData(squeeze(pcvoxels), opt.reconmask);
+      FRACvalue = unMaskData(squeeze(FRACvalue), opt.reconmask);
+      glmbadness = unMaskData(squeeze(permute(glmbadness, [1,4,2,3])), opt.reconmask);
+      rrbadness = unMaskData(squeeze(permute(rrbadness, [1,4,2,3])), opt.reconmask);
+      scaleoffset = unMaskData(squeeze(permute(scaleoffset, [1,4,2,3])), opt.reconmask);
+    end
     file0 = fullfile(outputdir{1},'TYPED_FITHRF_GLMDENOISE_RR.mat');
   end
   if opt.wantfileoutputs(whmodel)==1
@@ -1056,6 +1181,21 @@ for ttt=1:length(todo)
         if ~isempty(pcvoxels)
           imwrite(uint8(255*makeimagestack(pcvoxels, [0 1])),gray(256),fullfile(outputdir{2},'pcvoxels.png'));
         end
+      elseif isfield(opt, 'reconmask')
+        if ~isempty(noisepool)
+          if numel(noisepool) ~=numel(opt.reconmask)
+            imwrite(uint8(255*makeimagestack(unMaskData(noisepool, opt.reconmask),[0 1])),gray(256),fullfile(outputdir{2},'noisepool.png'));
+          else
+            imwrite(uint8(255*makeimagestack(noisepool,[0 1])),gray(256),fullfile(outputdir{2},'noisepool.png'));
+          end
+        end
+        if ~isempty(pcvoxels)
+          if numel(pcvoxels) ~= numel(opt.reconmask)
+            imwrite(uint8(255*makeimagestack(unMaskData(pcvoxels, opt.reconmask), [0 1])),gray(256),fullfile(outputdir{2},'pcvoxels.png'));
+          else
+            imwrite(uint8(255*makeimagestack(pcvoxels, [0 1])),gray(256),fullfile(outputdir{2},'pcvoxels.png'));
+          end
+        end
       end
       if ~isempty(xvaltrend)
         figureprep;
@@ -1069,6 +1209,15 @@ for ttt=1:length(todo)
     if whmodel==4 && is3d
       imwrite(uint8(255*makeimagestack(R2,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'typeD_R2.png'));
       imwrite(uint8(255*makeimagestack(FRACvalue,[0 1])),copper(256),fullfile(outputdir{2},'FRACvalue.png'));
+    elseif whmodel==4  && isfield(opt, 'reconmask')
+      if  numel(R2) ~= numel(opt.reconmask)
+        imwrite(uint8(255*makeimagestack(unMaskData(R2, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'typeD_R2.png'));
+        imwrite(uint8(255*makeimagestack(unMaskData(FRACvalue, opt.reconmask),[0 1])),copper(256),fullfile(outputdir{2},'FRACvalue.png'));
+      else
+        imwrite(uint8(255*makeimagestack(R2,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'typeD_R2.png'));
+        imwrite(uint8(255*makeimagestack(FRACvalue,[0 1])),copper(256),fullfile(outputdir{2},'FRACvalue.png'));
+      end
+
     end
   end
 
