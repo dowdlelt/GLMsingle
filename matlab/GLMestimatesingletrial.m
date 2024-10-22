@@ -671,7 +671,8 @@ if opt.wantlss==1
 end
 
 % check opt.similarconditions, it should be monotonicily increasing ints.
-assert(max(diff(opt.similarconditions)) == 1, 'opt.similarconditions should be a vector of monotonically increasing integers');
+unique_conditions = unique(opt.similarconditions);
+assert(isequal(unique_conditions, 1:length(unique_conditions)), 'opt.similarconditions should be a vector of monotonically increasing integers starting from 1 without skipping any values');
 % it should also be the same length as the number of conditions (width of design).
 assert(size(opt.similarconditions,2) == size(design{1},2), 'opt.similarconditions should be the same length as the number of conditions in the design matrix');
 % initialize output
