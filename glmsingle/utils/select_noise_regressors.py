@@ -18,8 +18,8 @@ def select_noise_regressors(r2_nrs, pcstop=1.05):
 
     # initialize (this will hold the best performance observed thus far)
     chosen = 0
-    best = -np.Inf
-    for p in range(1, numpcstotry):
+    best = -np.inf
+    for p in range(numpcstotry+1):  # notice the +1
 
         # if better than best so far
         if curve[p] > best:

@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+from glmsingle.utils.zerodiv import zerodiv
 
 
 def calcbadness(xvals, validcolumns, stimix, results, sessionindicator):
@@ -53,6 +54,7 @@ def calcbadness(xvals, validcolumns, stimix, results, sessionindicator):
     the session under all of the various regularization levels.
     """
     # initialize
+
     badness = np.zeros(
         (results[0].shape[0], len(results))
         )
@@ -70,20 +72,18 @@ def calcbadness(xvals, validcolumns, stimix, results, sessionindicator):
 
         wh = np.flatnonzero(np.array(sessionindicator) == sess)
 
-        whcol = np.concatenate(np.asarray(validcolumns)[wh])
+        whcol = np.concatenate([validcolumns[x] for x in wh])
 
         # mean of unregularized case
         mn = np.mean(results[0][:, whcol], axis=1)
 
         # std dev of unregularized case
-        sd = np.std(results[0][:, whcol], axis=1)
+        sd = np.std(results[0][:, whcol], axis=1, ddof=1)
 
         resultsdm = copy.deepcopy(results)
         for runis in range(len(resultsdm)):
-
             rundemean = results[runis][:, whcol]-mn[:, np.newaxis]
-            with np.errstate(divide="ignore", invalid="ignore"):
-                resultsdm[runis][:, whcol] = rundemean / sd[:, np.newaxis]
+            resultsdm[runis][:, whcol] = zerodiv(rundemean, sd, val=0, wantcaution=0)
 
     # do cross-validation
     for xx in range(len(xvals)):
@@ -94,21 +94,29 @@ def calcbadness(xvals, validcolumns, stimix, results, sessionindicator):
         trainix = np.setdiff1d(alltheruns, testix)
 
         # calc
-        # vector of trial indices in the testing data
-        testcols = np.asarray(validcolumns[testix])
+        # we need to check whether we need
+        # to concatenate multiple test runs
+        if testix.size > 1:
+            # vector of trial indices in the testing data
+            testcols = np.concatenate([validcolumns[x] for x in testix])
+
+            # vector of condition-ids in the testing data
+            testids = np.concatenate([stimix[x] for x in testix])
+        else:
+            # default leave-one-out case.
+            # vector of trial indices in the testing data
+
+            testcols = validcolumns[testix]
+
+            # vector of condition-ids in the testing data
+            testids = stimix[testix]
 
         # vector of trial indices in the training data
-        traincols = np.concatenate(
-            np.asarray([validcolumns[tx] for tx in trainix])
-            )
-
-        # vector of condition-ids in the testing data
-        testids = stimix[testix]
+        traincols = np.concatenate([validcolumns[x] for x in trainix])
 
         # vector of condition-ids in the training data
-        trainids = np.concatenate(
-            np.asarray([stimix[tx] for tx in trainix])
-            )
+        trainids = np.concatenate([stimix[x] for x in trainix])
+
         # calculate cross-validation performance
         for pcr in range(len(results)):
             # hashrec = cell(1,max(testids));  # speed-up by caching results
@@ -136,13 +144,3 @@ def calcbadness(xvals, validcolumns, stimix, results, sessionindicator):
                     # NOTICE the use of results(0)
 
     return badness
-
-
-"""
-# if isempty(hashrec{testids(ttt)})
-# hashrec{testids(ttt)} = \\
-#  mean(results(ll).modelmd{2}(:,traincols(haveix)),2); # voxels x 1
-# hashrec{testids(ttt)} = results(ll).modelmd{2}(:,traincols(haveix));
-# voxels x instances
-# end
-"""
