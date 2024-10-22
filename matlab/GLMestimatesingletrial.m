@@ -498,7 +498,7 @@ end
 %% %%%%%%%%%%%%%%%%%%% FIT TYPE-A MODEL [ON-OFF]
 
 % The approach:
-% (1) Every stimulus is treated as the same.
+% (1) Every stimulus is treated as the same, unless specified otherwise. 
 % (2) We assume the HRF.
 
 % define
