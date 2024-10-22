@@ -776,7 +776,20 @@ end
 
 % collapse all conditions and fit each run separately
 fprintf('*** FITTING DIAGNOSTIC RUN-WISE FIR MODEL ***\n');
-design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
+% Here we combine based on opt.similarconditions
+if max(opt.similarcondtiions == 1 )
+  % There was only one, its single style stimulus land, living is easy
+  design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
+else
+  % Each condition gets its own column in design0
+  % for example if there were visual or auditory stimuli
+  for cond = unique(opt.similarconditions)
+    for run = length(design) % the number of runs. 
+          design0{run}(:,cond) = sum(design{run}(:,opt.similarconditions == cond),2);
+    end
+  end
+end
+
 firR2 = [];   % X x Y x Z x runs (R2 of FIR model for each run)
 firtcs = [];  % X x Y x Z x 1 x time x runs (FIR timecourse for each run)
 for p=1:length(data)
@@ -876,8 +889,19 @@ whmodel = 1;
 % collapse all conditions and fit
 fprintf('*** FITTING TYPE-A MODEL (ONOFF) ***\n');
 % Here we combine based on opt.similarconditions
+if max(opt.similarcondtiions == 1 )
+  % There was only one, its single style stimulus land, living is easy
+  design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
+else
+  % Each condition gets its own column in design0
+  % for example if there were visual or auditory stimuli
+  for cond = unique(opt.similarconditions)
+    for run = length(design) % the number of runs. 
+          design0{run}(:,cond) = sum(design{run}(:,opt.similarconditions == cond),2);
+    end
+  end
+end
 
-design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
 results0 = GLMestimatemodel(design0,data,stimdur,tr,'assume',opt.hrftoassume,0, ...
                             struct('extraregressors',{opt.extraregressors}, ...
                                    'maxpolydeg',opt.maxpolydeg, ...
