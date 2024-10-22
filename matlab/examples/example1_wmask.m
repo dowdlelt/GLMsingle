@@ -137,6 +137,7 @@ axis off
 c.Label.String = 'T2*w intensity';
 set(gca,'FontSize',15)
 
+
 %% Call GLMestimatesingletrial with default parameters
 
 % Outputs and figures will be stored in a folder (you can specify its name
@@ -189,7 +190,7 @@ set(gca,'FontSize',15)
 
 % For the purpose of this example, we will keep all outputs in the memory.
 opt = struct('wantmemoryoutputs',[1 1 1 1]);
-
+opt.reconmask = squeeze(data{1}(:,:,:,1) > 0); % A simple stupid mask. 
 % This example saves output .mat files to the folder
 % "example1outputs/GLMsingle". If these outputs don't already exist, we
 % will perform the time-consuming call to GLMestimatesingletrial.m;
