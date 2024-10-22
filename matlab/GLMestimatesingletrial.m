@@ -596,6 +596,9 @@ end
 if ~isfield(opt,'wantautoscale') || isempty(opt.wantautoscale)
   opt.wantautoscale = 1;
 end
+if ~isfield(opt,'similarconditions') || isempty(opt.wantautoscale)
+  opt.similarconditions = ones(size(design{1},2));
+end
 
 % deal with output directory
 if ~iscell(outputdir)
@@ -659,6 +662,10 @@ if opt.wantlss==1
          '<wantlss> is 1, but you did not request type B');
 end
 
+% check opt.similarconditions, it should be monotonicily increasing ints.
+assert(max(diff(opt.similarconditions)) == 1, 'opt.similarconditions should be a vector of monotonically increasing integers');
+% it should also be the same length as the number of conditions (width of design).
+assert(size(opt.similarconditions,2) == size(design{1},2), 'opt.similarconditions should be the same length as the number of conditions in the design matrix');
 % initialize output
 results = {};
 
@@ -868,6 +875,8 @@ whmodel = 1;
 
 % collapse all conditions and fit
 fprintf('*** FITTING TYPE-A MODEL (ONOFF) ***\n');
+% Here we combine based on opt.similarconditions
+
 design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
 results0 = GLMestimatemodel(design0,data,stimdur,tr,'assume',opt.hrftoassume,0, ...
                             struct('extraregressors',{opt.extraregressors}, ...
