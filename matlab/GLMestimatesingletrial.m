@@ -86,6 +86,14 @@ function [results,resultsdesign] = GLMestimatesingletrial(design,data,stimdur,tr
 %   selection; the outputs of this function do not reflect z-scoring, and the user
 %   may wish to post-hoc apply z-scoring. Default: 1*ones(1,n) which means to interpret
 %   all runs as coming from the same session.
+%   
+%   <similarconditions> (optional) is a vector that is the length of the design,
+%   or in other words, the number of conditions. It consist of integers that 
+%   indicate a grouping of the stimuli, such that they are more intelligently
+%   combined when creating the ON-OFF model. For example, [1 1 2 2 ] could 
+%   indicate that the first two conditions involve a visual stimulus and the 
+%   second two conditions involve an auditory stimulus. Default: ones(1, numcond)
+%   They should start at 1, and not skip values. 
 %
 %   *** I/O FLAGS ***
 %
