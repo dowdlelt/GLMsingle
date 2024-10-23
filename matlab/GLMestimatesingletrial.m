@@ -786,14 +786,15 @@ end
 % collapse all conditions and fit each run separately
 fprintf('*** FITTING DIAGNOSTIC RUN-WISE FIR MODEL ***\n');
 % Here we combine based on opt.similarconditions
-if max(opt.similarcondtiions == 1 )
+if max(opt.similarconditions) == 1 
   % There was only one, its single style stimulus land, living is easy
   design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
 else
   % Each condition gets its own column in design0
   % for example if there were visual or auditory stimuli
+  design0 = cell(1, length(design));
   for cond = unique(opt.similarconditions)
-    for run = length(design) % the number of runs. 
+    for run = 1:length(design) % the number of runs. 
           design0{run}(:,cond) = sum(design{run}(:,opt.similarconditions == cond),2);
     end
   end
@@ -820,62 +821,141 @@ firix = find(firR2mn > firthresh);  % we want to average the top 1st percentile
 % calc timecourse averages
 firavg = [];  % time x runs
 for rr=1:length(data)
-  temp = subscript(squish(firtcs(:,:,:,:,:,rr),4),{firix ':'});  % voxels x time
-  firavg(:,rr) = median(temp,1);
+    for cond = unique(opt.similarconditions)
+        temp = subscript(squish(firtcs(:,:,:,cond,:,rr),4),{firix ':'}); 
+%         temp = subscript(squish(firtcs(:,:,:,:,:,rr),4),{firix ':'});  % voxels x time
+cond
+        firavg(:,rr, cond) = median(temp,1);
+    end
+
 end
-firgrandavg = mean(firavg,2);  % time x 1
+firgrandavg = squeeze(mean(firavg,2));  % time x 1
 
 % figures
 if wantfig
+  if max(opt.similarconditions) == 1
+          
+      %% make the figure
+      figureprep([100 100 1100 750]);
+      subplot(2,2,1); hold on;
+      cmap0 = cmapturbo(length(data));
+      h = []; legendlabs = {};
+      for rr=1:length(data)
+        h(rr) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr),'o-','Color',cmap0(rr,:));
+        legendlabs{rr} = sprintf('Run %d',rr);
+      end
+      h(end+1) = plot(0:tr:(length(firgrandavg)-1)*tr,firgrandavg,'r-','LineWidth',2);
+      legendlabs{end+1} = 'Run Avg';
+      [~,mxix] = max(firgrandavg); % there is a problem here. 
+      ax = axis; axis([0 (size(firavg,1)-1)*tr*1.5 ax(3:4)]); ax = axis;
+      straightline(0,'h','k-');
+      straightline((mxix-1)*tr,'v','k:');
+      xlabel('Time from trial onset (s)');
+      ylabel('BOLD (%)');
+      legend(h,legendlabs,'Location','NorthEast');
+      subplot(2,2,2); hold on;
+      bar(1:length(data),firavg(mxix,:));
+      axis([0 length(data)+1 ax(3:4)]);
+      set(gca,'XTick',1:length(data));
+      xlabel('Run number');
+      ylabel('BOLD at peak time (%)');
+      subplot(2,2,3); hold on;
+      cmap0 = cmapturbo(nh);
+      h = []; legendlabs = {};
+      for hh=1:nh
+        h(hh) = plot(0:tr:(size(opt.hrflibrary,1)-1)*tr,opt.hrflibrary(:,hh),'-','Color',cmap0(hh,:));
+        legendlabs{hh} = sprintf('HRFindex%d',hh);
+      end
+      h(end+1) = plot(0:tr:(length(opt.hrftoassume)-1)*tr,opt.hrftoassume,'k-','LineWidth',2);
+      legendlabs{end+1} = 'HRFassume';
+      xlim(ax(1:2));
+      straightline(0,'h','k-');
+      xlabel('Time from trial onset (s)');
+      ylabel('BOLD (a.u.)');
+      legend(h,legendlabs,'Location','NorthEast');
+      figurewrite('runwiseFIR',[],[],outputdir{2});
+    
+      % more figures
+      if is3d
+        for rr=1:size(firR2,4)
+          imwrite(uint8(255*makeimagestack(firR2(:,:,:,rr),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
+        end
+        imwrite(uint8(255*makeimagestack(firR2mn,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
+        imwrite(uint8(255*makeimagestack(firR2mn > firthresh,[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
+      end
 
-  % make the figure
-  figureprep([100 100 1100 750]);
-  subplot(2,2,1); hold on;
-  cmap0 = cmapturbo(length(data));
-  h = []; legendlabs = {};
-  for rr=1:length(data)
-    h(rr) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr),'o-','Color',cmap0(rr,:));
-    legendlabs{rr} = sprintf('Run %d',rr);
-  end
-  h(end+1) = plot(0:tr:(length(firgrandavg)-1)*tr,firgrandavg,'r-','LineWidth',2);
-  legendlabs{end+1} = 'Run Avg';
-  [~,mxix] = max(firgrandavg);
-  ax = axis; axis([0 (size(firavg,1)-1)*tr*1.5 ax(3:4)]); ax = axis;
-  straightline(0,'h','k-');
-  straightline((mxix-1)*tr,'v','k:');
-  xlabel('Time from trial onset (s)');
-  ylabel('BOLD (%)');
-  legend(h,legendlabs,'Location','NorthEast');
-  subplot(2,2,2); hold on;
-  bar(1:length(data),firavg(mxix,:));
-  axis([0 length(data)+1 ax(3:4)]);
-  set(gca,'XTick',1:length(data));
-  xlabel('Run number');
-  ylabel('BOLD at peak time (%)');
-  subplot(2,2,3); hold on;
-  cmap0 = cmapturbo(nh);
-  h = []; legendlabs = {};
-  for hh=1:nh
-    h(hh) = plot(0:tr:(size(opt.hrflibrary,1)-1)*tr,opt.hrflibrary(:,hh),'-','Color',cmap0(hh,:));
-    legendlabs{hh} = sprintf('HRFindex%d',hh);
-  end
-  h(end+1) = plot(0:tr:(length(opt.hrftoassume)-1)*tr,opt.hrftoassume,'k-','LineWidth',2);
-  legendlabs{end+1} = 'HRFassume';
-  xlim(ax(1:2));
-  straightline(0,'h','k-');
-  xlabel('Time from trial onset (s)');
-  ylabel('BOLD (a.u.)');
-  legend(h,legendlabs,'Location','NorthEast');
-  figurewrite('runwiseFIR',[],[],outputdir{2});
+  else
+      %% Make figures for the multiple condition case. 
+      figureprep([100 100 1100 750]);
+      subplot(2,2,1); hold on;
+      cmap0 = cmapturbo(length(data));
+      h = []; legendlabs = {};
+      count = 1;
+      for rr=1:length(data)
+          for cond = unique(opt.similarconditions)
+            h(count) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr, cond),'o-','Color',cmap0(rr,:));
+            legendlabs{count} = sprintf('Run %d C%d',rr, cond);
+%             h(rr) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr, cond),'o-','Color',cmap0(rr,:));
+%             legendlabs{rr} = sprintf('Run %d C%d',rr, cond);
+            count = count +1;
+          end
+      end
+      for cond = unique(opt.similarconditions)
+      h(end+1) = plot(0:tr:(length(firgrandavg)-1)*tr,firgrandavg(:,cond),'r-','LineWidth',2);
+      end
 
-  % more figures
-  if is3d
-    for rr=1:size(firR2,4)
-      imwrite(uint8(255*makeimagestack(firR2(:,:,:,rr),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
-    end
-    imwrite(uint8(255*makeimagestack(firR2mn,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
-    imwrite(uint8(255*makeimagestack(firR2mn > firthresh,[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
-  end
+      legendlabs{end+1} = 'Run Avg';
+      [~,mxix] = max(firgrandavg);
+      ax = axis; axis([0 (size(firavg,1)-1)*tr*1.5 ax(3:4)]); ax = axis;
+      straightline(0,'h','k-');
+      straightline((mxix-1)*tr,'v','k:');
+      xlabel('Time from trial onset (s)');
+      ylabel('BOLD (%)');
+      legend(h,legendlabs,'Location','NorthEast');
+      subplot(2,2,2); hold on;
+      bardata = [];
+      for cond = unique(opt.similarconditions)
+          bardata = [bardata; firavg(mxix(cond),:, cond)];
+      end
+      for cond = unique(opt.similarconditions)
+        bar(1:length(data),bardata);
+      end
+      axis([0 length(data)+1 ax(3:4)]);
+      set(gca,'XTick',1:length(data));
+      xlabel('Run number');
+      ylabel('BOLD at peak time (%)');
+      subplot(2,2,3); hold on;
+      cmap0 = cmapturbo(nh);
+      h = []; legendlabs = {};
+      for hh=1:nh
+        h(hh) = plot(0:tr:(size(opt.hrflibrary,1)-1)*tr,opt.hrflibrary(:,hh),'-','Color',cmap0(hh,:));
+        legendlabs{hh} = sprintf('HRFindex%d',hh);
+      end
+      h(end+1) = plot(0:tr:(length(opt.hrftoassume)-1)*tr,opt.hrftoassume,'k-','LineWidth',2);
+      legendlabs{end+1} = 'HRFassume';
+      xlim(ax(1:2));
+      straightline(0,'h','k-');
+      xlabel('Time from trial onset (s)');
+      ylabel('BOLD (a.u.)');
+      legend(h,legendlabs,'Location','NorthEast');
+      figurewrite('runwiseFIR',[],[],outputdir{2});
+    
+      % more figures
+      if is3d
+        for rr=1:size(firR2,4)
+          imwrite(uint8(255*makeimagestack(firR2(:,:,:,rr),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
+        end
+        imwrite(uint8(255*makeimagestack(firR2mn,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
+        imwrite(uint8(255*makeimagestack(firR2mn > firthresh,[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
+
+      elseif wantfig && isfield(opt, 'reconmask')
+        for rr=1:size(firR2,4)
+          imwrite(uint8(255*makeimagestack(firR2(:,:,:,rr),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
+        end
+        imwrite(uint8(255*makeimagestack(unMaskData(firR2mn, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
+        imwrite(uint8(255*makeimagestack(unMaskData(firR2mn > firthresh, opt.reconmask),[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
+      end
+    
 
 end
 
@@ -898,7 +978,7 @@ whmodel = 1;
 % collapse all conditions and fit
 fprintf('*** FITTING TYPE-A MODEL (ONOFF) ***\n');
 % Here we combine based on opt.similarconditions
-if max(opt.similarcondtiions == 1 )
+if max(opt.similarcondtiions) == 1 
   % There was only one, its single style stimulus land, living is easy
   design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
 else
