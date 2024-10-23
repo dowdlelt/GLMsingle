@@ -793,15 +793,38 @@ else
   % Each condition gets its own column in design0
   % for example if there were visual or auditory stimuli
   design0 = cell(1, length(design));
+  % make a version that assumes there is no differences
+  % in the conditions. 
+  design_naive = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
+  % Prep a version that is ON/OFF for only one condition versus other. 
+  % We can use this to find the max R2 voxs per conditions.
+  design_ind = cell(max(opt.similarconditions), length(design));
+  
   for cond = unique(opt.similarconditions)
     for run = 1:length(design) % the number of runs. 
           design0{run}(:,cond) = sum(design{run}(:,opt.similarconditions == cond),2);
+          design_ind{cond, run} = sum(design{run}(:,opt.similarconditions == cond),2);
     end
   end
 end
 
 firR2 = [];   % X x Y x Z x runs (R2 of FIR model for each run)
 firtcs = [];  % X x Y x Z x 1 x time x runs (FIR timecourse for each run)
+
+if max(opt.similarconditions) > 1
+    
+    % Set up the R2 holder for naive case, easy
+    firR2naive = [];   % X x Y x Z x runs (R2 of FIR model for each run)
+    firtcs = [];  % X x Y x Z x 1 x time x runs (FIR timecourse for each run)
+
+
+    firR2bycond = cell(1,max(opt.similarconditions));   % X x Y x Z x runs x cond (R2 of FIR model for each run)
+    for cond = 1:size(design_ind,1)
+        firR2bycond{cond} = [];
+    end
+end
+
+
 for p=1:length(data)
   results0 = GLMestimatemodel(design0(p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
                               struct('extraregressors',{opt.extraregressors(p)}, ...
@@ -810,6 +833,28 @@ for p=1:length(data)
                                      'suppressoutput',1));
   firR2 = cat(4,firR2,results0.R2);
   firtcs = cat(6,firtcs,results0.modelmd);
+
+  if max(opt.similarconditions) > 1
+
+      % Run the naive model for comparison purposes. 
+      resultsNaive = GLMestimatemodel(design_naive(p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
+                              struct('extraregressors',{opt.extraregressors(p)}, ...
+                                     'maxpolydeg',opt.maxpolydeg, ...
+                                     'wantpercentbold',opt.wantpercentbold, ...
+                                     'suppressoutput',1));
+      firR2naive = cat(4,firR2naive,resultsNaive.R2);
+        % and loop through each seperate stimulus condition
+      for cond = 1:size(design_ind,1)
+          
+          resultsInd = GLMestimatemodel(design_ind(cond, p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
+                                  struct('extraregressors',{opt.extraregressors(p)}, ...
+                                         'maxpolydeg',opt.maxpolydeg, ...
+                                         'wantpercentbold',opt.wantpercentbold, ...
+                                         'suppressoutput',1));
+          firR2bycond{cond} = cat(4,firR2bycond{cond},resultsInd.R2);
+      end
+  end
+
 end
 clear results0;
 
@@ -817,24 +862,49 @@ clear results0;
 firR2mn = mean(firR2,4);
 firthresh = prctile(firR2mn(:),opt.firpct);
 firix = find(firR2mn > firthresh);  % we want to average the top 1st percentile
+if max(opt.similarconditions) > 1
 
-% calc timecourse averages
-firavg = [];  % time x runs
-for rr=1:length(data)
-    for cond = unique(opt.similarconditions)
-        temp = subscript(squish(firtcs(:,:,:,cond,:,rr),4),{firix ':'}); 
-%         temp = subscript(squish(firtcs(:,:,:,:,:,rr),4),{firix ':'});  % voxels x time
-cond
-        firavg(:,rr, cond) = median(temp,1);
+firR2mnnaive = mean(firR2naive,4);
+firthreshnaive = prctile(firR2mnnaive(:),opt.firpct);
+firixnaive = find(firR2mnnaive > firthreshnaive);
+end
+
+% We want to do this again, based on the single models - the expectation is
+% that these are different subsets of voxels. 
+if max(opt.similarconditions) > 1
+    % get seperate indicies per condition, we will use these later when
+    % plotting. 
+    firR2mnbycond = [];
+    firthreshbycond = [];
+    firixbycond = [];
+    for stim_cond = 1:max(opt.similarconditions)
+        firR2mnbycond(stim_cond, :) = squeeze(mean(firR2bycond{stim_cond}, 4));
+        firthreshbycond(stim_cond) = prctile(firR2mnbycond(stim_cond, :), opt.firpct);
+        firixbycond(stim_cond, :) = find(firR2mnbycond(stim_cond,:) > firthreshbycond(stim_cond)); 
     end
 
 end
-firgrandavg = squeeze(mean(firavg,2));  % time x 1
+
+
+%%
+
+
 
 % figures
 if wantfig
   if max(opt.similarconditions) == 1
-          
+
+      % calc timecourse averages
+        firavg = [];  % time x runs
+        for rr=1:length(data)
+            for cond = unique(opt.similarconditions)
+                temp = subscript(squish(firtcs(:,:,:,cond,:,rr),4),{firix ':'}); 
+                  firavg(:,rr, cond) = median(temp,1);
+            end
+        
+        end
+        firgrandavg = squeeze(mean(firavg,2));  % time x 1
+                  
       %% make the figure
       figureprep([100 100 1100 750]);
       subplot(2,2,1); hold on;
@@ -886,6 +956,19 @@ if wantfig
 
   else
       %% Make figures for the multiple condition case. 
+    % calc timecourse averages, one from the voxels from each condition
+        firavg = [];  % time x runs
+        for rr=1:length(data)
+            for cond = unique(opt.similarconditions)
+                temp = subscript(squish(firtcs(:,:,:,cond,:,rr),4),{firixbycond(cond, :) ':'}); 
+                  firavg(:,rr, cond) = median(temp,1);
+            end
+        
+        end
+        firgrandavg = squeeze(mean(firavg,2));  % time x 1
+
+
+
       figureprep([100 100 1100 750]);
       subplot(2,2,1); hold on;
       cmap0 = cmapturbo(length(data));
@@ -952,9 +1035,20 @@ if wantfig
         end
         imwrite(uint8(255*makeimagestack(unMaskData(firR2mn, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
         imwrite(uint8(255*makeimagestack(unMaskData(firR2mn > firthresh, opt.reconmask),[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
+        if max(opt.similarconditions) > 1 
+            % save out the naive image
+            unmasked_threshmap = unMaskData(squeeze(firR2mnnaive > firthreshnaive), opt.reconmask);
+            imwrite(uint8(255*makeimagestack(unmasked_threshmap,[0 1])),gray(256),fullfile(outputdir{2},sprintf('runwiseFIR_summaryvoxels_naive.png', stim_cond)));
+
+            for stim_cond = 1:max(opt.similarconditions)
+                unmasked_threshmap = unMaskData(squeeze(firR2mnbycond(stim_cond,:) > firthreshbycond(stim_cond))', opt.reconmask);
+                imwrite(uint8(255*makeimagestack(unmasked_threshmap,[0 1])),gray(256),fullfile(outputdir{2},sprintf('runwiseFIR_summaryvoxels_byCond%02d.png', stim_cond)));
+            end
+
+        end
       end
   end
-end
+
 
 
 end
@@ -978,7 +1072,7 @@ whmodel = 1;
 % collapse all conditions and fit
 fprintf('*** FITTING TYPE-A MODEL (ONOFF) ***\n');
 % Here we combine based on opt.similarconditions
-if max(opt.similarcondtiions) == 1 
+if max(opt.similarconditions) == 1 
   % There was only one, its single style stimulus land, living is easy
   design0 = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
 else
