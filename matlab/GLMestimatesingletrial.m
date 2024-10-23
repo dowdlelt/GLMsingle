@@ -895,8 +895,6 @@ if wantfig
           for cond = unique(opt.similarconditions)
             h(count) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr, cond),'o-','Color',cmap0(rr,:));
             legendlabs{count} = sprintf('Run %d C%d',rr, cond);
-%             h(rr) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr, cond),'o-','Color',cmap0(rr,:));
-%             legendlabs{rr} = sprintf('Run %d C%d',rr, cond);
             count = count +1;
           end
       end
@@ -955,7 +953,9 @@ if wantfig
         imwrite(uint8(255*makeimagestack(unMaskData(firR2mn, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
         imwrite(uint8(255*makeimagestack(unMaskData(firR2mn > firthresh, opt.reconmask),[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
       end
-    
+  end
+end
+
 
 end
 
@@ -984,6 +984,7 @@ if max(opt.similarcondtiions) == 1
 else
   % Each condition gets its own column in design0
   % for example if there were visual or auditory stimuli
+  % life is harder. 
   for cond = unique(opt.similarconditions)
     for run = length(design) % the number of runs. 
           design0{run}(:,cond) = sum(design{run}(:,opt.similarconditions == cond),2);
