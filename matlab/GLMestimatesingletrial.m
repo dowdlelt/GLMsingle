@@ -1316,6 +1316,31 @@ else
       imwrite(uint8(255*makeimagestack(HRFindex,[1 nh])),jet(256),fullfile(outputdir{2},'HRFindex.png'));
     end
 
+    % ONOFFR2 vs. HRFindex scatter
+    figureprep([100 100 600 600]); hold on;
+    scatter(onoffR2(:),HRFindex(:)+0.2*randn(size(HRFindex(:))),9,'r.');
+    set(gca,'YTick',1:nh);
+    ylim([0 nh+1]);
+    xlabel('ON-OFF model R^2');
+    ylabel('HRF index (with small amount of jitter)');
+    figurewrite('onoffR2_vs_HRFindex',[],[],outputdir{2});
+
+    % beta visualization
+    temp = subscript(squish(modelmd,3),{onoffvizix ':'});
+    if ~exist('betavizmx','var')
+      betavizmx = prctile(abs(temp(:)),99);
+    end
+    imwrite(cmaplookup(temp,-betavizmx,betavizmx,[],cmapsign4(256)),fullfile(outputdir{2},'betaviz_typeB.png'));
+
+    % dmetric visualization
+    if is3d
+      temp = calcdmetric(modelmd,stimorder);
+      if ~exist('drng','var')
+        drng = [min(temp(:)) max(temp(:))];
+      end
+      imwrite(uint8(255*makeimagestack(temp,drng)),hot(256),fullfile(outputdir{2},'dmetric_typeB.png'));
+    end
+
   end
 
   % preserve in memory if desired, and then clean up
