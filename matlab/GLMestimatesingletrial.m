@@ -604,7 +604,7 @@ end
 if ~isfield(opt,'wantautoscale') || isempty(opt.wantautoscale)
   opt.wantautoscale = 1;
 end
-if ~isfield(opt,'similarconditions') || isempty(opt.wantautoscale)
+if ~isfield(opt,'similarconditions') || isempty(opt.similarconditions)
   opt.similarconditions = ones(size(design{1},2));
 end
 
@@ -795,15 +795,15 @@ else
   design0 = cell(1, length(design));
   % make a version that assumes there is no differences
   % in the conditions. 
-  design_naive = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
+  designNAIVE = cellfun(@(x) sum(x,2),design,'UniformOutput',0);
   % Prep a version that is ON/OFF for only one condition versus other. 
   % We can use this to find the max R2 voxs per conditions.
-  design_ind = cell(max(opt.similarconditions), length(design));
+  designINDIV = cell(max(opt.similarconditions), length(design));
   
   for cond = unique(opt.similarconditions)
     for run = 1:length(design) % the number of runs. 
           design0{run}(:,cond) = sum(design{run}(:,opt.similarconditions == cond),2);
-          design_ind{cond, run} = sum(design{run}(:,opt.similarconditions == cond),2);
+          designINDIV{cond, run} = sum(design{run}(:,opt.similarconditions == cond),2);
     end
   end
 end
@@ -817,13 +817,11 @@ if max(opt.similarconditions) > 1
     firR2naive = [];   % X x Y x Z x runs (R2 of FIR model for each run)
     firtcs = [];  % X x Y x Z x 1 x time x runs (FIR timecourse for each run)
 
-
     firR2bycond = cell(1,max(opt.similarconditions));   % X x Y x Z x runs x cond (R2 of FIR model for each run)
-    for cond = 1:size(design_ind,1)
+    for cond = 1:size(designINDIV,1)
         firR2bycond{cond} = [];
     end
 end
-
 
 for p=1:length(data)
   results0 = GLMestimatemodel(design0(p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
@@ -837,16 +835,16 @@ for p=1:length(data)
   if max(opt.similarconditions) > 1
 
       % Run the naive model for comparison purposes. 
-      resultsNaive = GLMestimatemodel(design_naive(p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
+      resultsNaive = GLMestimatemodel(designNAIVE(p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
                               struct('extraregressors',{opt.extraregressors(p)}, ...
                                      'maxpolydeg',opt.maxpolydeg, ...
                                      'wantpercentbold',opt.wantpercentbold, ...
                                      'suppressoutput',1));
       firR2naive = cat(4,firR2naive,resultsNaive.R2);
         % and loop through each seperate stimulus condition
-      for cond = 1:size(design_ind,1)
+      for cond = 1:size(designINDIV,1)
           
-          resultsInd = GLMestimatemodel(design_ind(cond, p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
+          resultsInd = GLMestimatemodel(designINDIV(cond, p),data(p),stimdur,tr,'fir',floor(opt.firdelay/tr),0, ...
                                   struct('extraregressors',{opt.extraregressors(p)}, ...
                                          'maxpolydeg',opt.maxpolydeg, ...
                                          'wantpercentbold',opt.wantpercentbold, ...
