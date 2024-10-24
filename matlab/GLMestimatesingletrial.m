@@ -952,6 +952,13 @@ if wantfig
         end
         imwrite(uint8(255*makeimagestack(firR2mn,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
         imwrite(uint8(255*makeimagestack(firR2mn > firthresh,[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
+      elseif wantfig && isfield(opt, 'reconmask')
+        for rr=1:size(firR2,4)
+          imwrite(uint8(255*makeimagestack(unMaskData(firR2(:,:,:,rr), opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
+        end
+        imwrite(uint8(255*makeimagestack(unMaskData(firR2mn, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
+        imwrite(uint8(255*makeimagestack(unMaskData(firR2mn > firthresh, opt.reconmask),[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
+        
       end
 
   else
@@ -1031,7 +1038,7 @@ if wantfig
 
       elseif wantfig && isfield(opt, 'reconmask')
         for rr=1:size(firR2,4)
-          imwrite(uint8(255*makeimagestack(firR2(:,:,:,rr),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
+          imwrite(uint8(255*makeimagestack(unMaskData(firR2(:,:,:,rr), opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},sprintf('runwiseFIR_R2_run%02d.png',rr)));
         end
         imwrite(uint8(255*makeimagestack(unMaskData(firR2mn, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'runwiseFIR_R2_runavg.png'));
         imwrite(uint8(255*makeimagestack(unMaskData(firR2mn > firthresh, opt.reconmask),[0 1])),gray(256),fullfile(outputdir{2},'runwiseFIR_summaryvoxels.png'));
@@ -1090,8 +1097,7 @@ results0 = GLMestimatemodel(design0,data,stimdur,tr,'assume',opt.hrftoassume,0, 
                             struct('extraregressors',{opt.extraregressors}, ...
                                    'maxpolydeg',opt.maxpolydeg, ...
                                    'wantpercentbold',opt.wantpercentbold, ...
-                                   'suppressoutput',1));
-
+                                   'suppressoutput',1))
 % remove unnecessary outputs
 results0 = rmfield(results0,{'models' 'modelse' 'signal' 'noise' 'SNR' 'hrffitvoxels' 'inputs'});
 
@@ -1116,7 +1122,7 @@ if opt.wantfileoutputs(whmodel)==1
   end
 
   fprintf('*** Saving results to %s. ***\n',file0);
-  save(file0,'-struct','results0','-v7.3');
+  %save(file0,'-struct','results0','-v7.3');
 end
 
 % figures?
