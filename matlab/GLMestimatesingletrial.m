@@ -977,17 +977,19 @@ if wantfig
       figureprep([100 100 1100 750]);
       subplot(2,2,1); hold on;
       cmap0 = cmapturbo(length(data));
+      possiblemarkers = ['o' '+' '.' '*' 'x' 'v' '>' '<' '^' '|'];
       h = []; legendlabs = {};
       count = 1;
       for rr=1:length(data)
           for cond = unique(opt.similarconditions)
-            h(count) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr, cond),'o-','Color',cmap0(rr,:));
+            h(count) = plot(0:tr:(size(firavg,1)-1)*tr,firavg(:,rr, cond),sprintf('%s-',possiblemarkers(rr)),'Color',cmap0(rr,:));
             legendlabs{count} = sprintf('Run %d C%d',rr, cond);
             count = count +1;
           end
       end
       for cond = unique(opt.similarconditions)
-      h(end+1) = plot(0:tr:(length(firgrandavg)-1)*tr,firgrandavg(:,cond),'r-','LineWidth',2);
+        h(end+1) = plot(0:tr:(length(firgrandavg)-1)*tr,firgrandavg(:,cond),sprintf('%s-',possiblemarkers(rr)),'LineWidth',2, 'Color', 'r');
+        legendlabs{end+1} = sprintf('Run Avg C%d', cond);
       end
 
       legendlabs{end+1} = 'Run Avg';
@@ -1351,7 +1353,7 @@ else
     end
   end
   clear FitHRFR2 FitHRFR2run R2 R2run modelmd;  % Note that we keep HRFindex and HRFindexrun around!!
-  if isfield(opt, 'reconmask')
+  if isfield(opt, 'reconmask') && numel(HRFindex) ~= sum(opt.reconmask, 'all')
     % Have to put the HRFindex and HRFindexrun back into what glmsingle expects.
     HRFindex = maskData(HRFindex, opt.reconmask);
     HRFindexrun = permute(maskData(HRFindexrun, opt.reconmask), [1,3,4,2]); % From nvox X run back to Nvox X 1 X 1 X Run
@@ -1371,7 +1373,7 @@ if opt.wantglmdenoise==0
 else
 
   % figure out the noise pool, careful about masking
-  if isfield(opt, 'reconmask')
+  if isfield(opt, 'reconmask') && numel(meanvol) ~= sum(opt.reconmask, 'all') % do we need to remask it?
     % The mean data needs to be put back into a comparable state
     meanvol = maskData(meanvol, opt.reconmask);
   end
