@@ -1823,6 +1823,14 @@ for ttt=1:length(todo)
     if whmodel==4 && is3d
       imwrite(uint8(255*makeimagestack(R2,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'typeD_R2.png'));
       imwrite(uint8(255*makeimagestack(FRACvalue,[0 1])),copper(256),fullfile(outputdir{2},'FRACvalue.png'));
+      if ~isempty(xvaltrend)
+        figureprep;
+        plot(0:opt.numpcstotry,xvaltrend);
+        straightline(pcnum,'v','r-');
+        xlabel('Number of GLMdenoise regressors');
+        ylabel('Cross-validation performance (higher is better)');
+        figurewrite('xvaltrend',[],[],outputdir{2});
+      end
     elseif whmodel==4  && isfield(opt, 'reconmask')
       if  numel(R2) ~= numel(opt.reconmask)
         imwrite(uint8(255*makeimagestack(unMaskData(R2, opt.reconmask),[0 100]).^0.5),hot(256),fullfile(outputdir{2},'typeD_R2.png'));
@@ -1831,7 +1839,14 @@ for ttt=1:length(todo)
         imwrite(uint8(255*makeimagestack(R2,[0 100]).^0.5),hot(256),fullfile(outputdir{2},'typeD_R2.png'));
         imwrite(uint8(255*makeimagestack(FRACvalue,[0 1])),copper(256),fullfile(outputdir{2},'FRACvalue.png'));
       end
-
+      if ~isempty(xvaltrend)
+        figureprep;
+        plot(0:opt.numpcstotry,xvaltrend);
+        straightline(pcnum,'v','r-');
+        xlabel('Number of GLMdenoise regressors');
+        ylabel('Cross-validation performance (higher is better)');
+        figurewrite('xvaltrend',[],[],outputdir{2});
+      end
     end
 
     % beta visualization
